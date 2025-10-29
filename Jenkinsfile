@@ -50,7 +50,7 @@ pipeline {
           echo "Performing Blue-Green deployment..."
 
           bat '''
-            kubectl get svc tasktimer-service -o=jsonpath="{.spec.selector.version}" > version.txt 2>nul || echo none > version.txt
+            kubectl get svc tasktimer-service -o=jsonpath="{.spec.selector.version}" > version.txt 2>nul if errorlevel 1 echo none > version.txt
           '''
 
           def svc = readFile('version.txt').trim()
