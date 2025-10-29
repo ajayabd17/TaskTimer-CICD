@@ -60,6 +60,7 @@ pipeline {
                     bat '''
                         kubectl get svc tasktimer-service -o=jsonpath="{.spec.selector.version}" > version.txt 2>nul || echo none > version.txt
                     '''
+
                     def current = readFile('version.txt').trim()
                     if (current == '' || current == 'none') { current = 'green' }
                     env.CURRENT_COLOR = current
@@ -71,10 +72,8 @@ pipeline {
 
         stage('Blue-Green Deploy') {
             steps {
-                script {
-                    bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\deployment-${env.NEW_COLOR}.yaml\""
-                    bat "kubectl rollout status deployment/tasktimer-${env.NEW_COLOR} --timeout=120s"
-                }
+                bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\deployment-${env.NEW_COLOR}.yaml\""
+                bat "kubectl rollout status deployment/tasktimer-${env.NEW_COLOR} --timeout=120s"
             }
         }
 
@@ -98,7 +97,7 @@ pipeline {
         stage('Smoke Test') {
             steps {
                 script {
-                    def url = sh(script: "minikube service tasktimer-service --url | head -1", returnStdout: true).trim()
+                    def url = bat(script: "minikube service tasktimer-service --url | findstr http", returnStdout: true).trim()
                     echo "Testing: ${url}"
                     bat "curl -f ${url} || exit 1"
                 }
