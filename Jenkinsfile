@@ -8,13 +8,9 @@ pipeline {
   stages {
     stage('Checkout') {
       steps {
-        checkout([
-          $class: 'GitSCM',
-          branches: [[name: '*/master']],
-          userRemoteConfigs: [[
-            url: 'https://github.com/ajayabd17/TaskTimer-CICD.git'
-          ]]
-        ])
+        // clone the actual app repo, not the CICD one
+        git branch: 'master',
+            url: 'https://github.com/ajayabd17/TaskTimer-React.git'
       }
     }
 
@@ -56,9 +52,10 @@ pipeline {
           def newVersion = svc == 'blue' ? 'green' : 'blue'
           echo "Current svc version: ${svc}, deploying new version: ${newVersion}"
 
-          bat "kubectl apply -f kubernetes\\deployment-${newVersion}.yaml"
+          // Use workspace paths for Kubernetes manifests
+          bat "kubectl apply -f ${WORKSPACE}\\kubernetes\\deployment-${newVersion}.yaml"
           bat "kubectl rollout status deployment/tasktimer-${newVersion} --timeout=120s"
-          bat "kubectl apply -f kubernetes\\service.yaml"
+          bat "kubectl apply -f ${WORKSPACE}\\kubernetes\\service.yaml"
           bat "kubectl patch service tasktimer-service -p \"{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"tasktimer\\\",\\\"version\\\":\\\"${newVersion}\\\"}}}\""
 
           if (svc != '') {
