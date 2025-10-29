@@ -41,20 +41,27 @@ pipeline {
       steps {
         echo "Performing Blue-Green deployment..."
 
+        // Get current version
         bat '''
           kubectl get svc tasktimer-service -o=jsonpath="{.spec.selector.version}" > version.txt 2>nul
           if errorlevel 1 echo none > version.txt
         '''
 
-        def current = readFile('version.txt').trim()
-        if (current == '' || current == 'none') current = 'green'
-        def newVersion = (current == 'blue') ? 'green' : 'blue'
+        // Read and process version — MUST BE INSIDE script {}
+        script {
+          def current = readFile('version.txt').trim()
+          if (current == '' || current == 'none') {
+            current = 'green'
+          }
+          def newVersion = (current == 'blue') ? 'green' : 'blue'
+          echo "Current: ${current}, Deploying: ${newVersion}"
 
-        bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\deployment-${newVersion}.yaml\""
-        bat "kubectl rollout status deployment/tasktimer-${newVersion} --timeout=120s"
-        bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\service.yaml\""
-        bat "kubectl patch service tasktimer-service -p \"{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"tasktimer\\\",\\\"version\\\":\\\"${newVersion}\\\"}}}\""
-        bat "kubectl delete deployment tasktimer-${current} --ignore-not-found=true"
+          bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\deployment-${newVersion}.yaml\""
+          bat "kubectl rollout status deployment/tasktimer-${newVersion} --timeout=120s"
+          bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\service.yaml\""
+          bat "kubectl patch service tasktimer-service -p \"{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"tasktimer\\\",\\\"version\\\":\\\"${newVersion}\\\"}}}\""
+          bat "kubectl delete deployment tasktimer-${current} --ignore-not-found=true"
+        }
       }
     }
   }
