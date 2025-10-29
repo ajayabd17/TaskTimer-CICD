@@ -28,12 +28,7 @@ pipeline {
           def tag = "${env.BUILD_NUMBER}"
           bat "docker build -t ${DOCKER_IMAGE}:${tag} ./app"
           bat "docker tag ${DOCKER_IMAGE}:${tag} ${DOCKER_IMAGE}:latest"
-
-          withCredentials([usernamePassword(
-            credentialsId: 'dockerhub',
-            usernameVariable: 'DOCKER_USER',
-            passwordVariable: 'DOCKER_PASS'
-          )]) {
+          withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
             bat """
               echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
               docker push ${DOCKER_IMAGE}:${tag}
@@ -49,24 +44,24 @@ pipeline {
         script {
           echo "Performing Blue-Green deployment..."
 
+          // 100% WINDOWS-SAFE — NO ||
           bat '''
-            kubectl get svc tasktimer-service -o=jsonpath="{.spec.selector.version}" > version.txt 2>nul || echo none > version.txt
+            kubectl get svc tasktimer-service -o=jsonpath="{.spec.selector.version}" > version.txt 2>nul
+            if errorlevel 1 echo none > version.txt
           '''
 
-          def svc = readFile('version.txt').trim()
-          if (svc == '' || svc == 'none') { svc = 'green' }
+          def current = readFile('version.txt').trim()
+          if (current == '' || current == 'none') { current = 'green' }
 
-          def newVersion = (svc == 'blue') ? 'green' : 'blue'
-          echo "Current: ${svc}, Deploying: ${newVersion}"
+          def newVersion = (current == 'blue') ? 'green' : 'blue'
+          echo "Current: ${current}, Deploying: ${newVersion}"
 
           bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\deployment-${newVersion}.yaml\""
           bat "kubectl rollout status deployment/tasktimer-${newVersion} --timeout=120s"
           bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\service.yaml\""
           bat "kubectl patch service tasktimer-service -p \"{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"tasktimer\\\",\\\"version\\\":\\\"${newVersion}\\\"}}}\""
 
-          def deleteCmd = "kubectl delete deployment tasktimer-${svc} --ignore-not-found"
-          echo "Cleaning old deployment: ${deleteCmd}"
-          bat(deleteCmd)
+          bat "kubectl delete deployment tasktimer-${current} --ignore-not-found=true"
         }
       }
     }
