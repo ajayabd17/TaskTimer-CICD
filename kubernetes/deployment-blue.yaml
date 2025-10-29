@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tasktimer-blue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tasktimer
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: tasktimer
+        version: blue
+    spec:
+      containers:
+        - name: tasktimer
+          image: ajayabd17/tasktimer-react:latest
+          ports:
+            - containerPort: 80
