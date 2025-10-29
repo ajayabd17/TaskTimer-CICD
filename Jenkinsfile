@@ -2,29 +2,43 @@ pipeline {
   agent any
   environment {
     DOCKER_IMAGE = "ajayabd17/tasktimer-react"
-    DOCKERHUB_CREDENTIALS = credentials('dockerhub') // set this credential in Jenkins (username/password)
+    DOCKERHUB_CREDENTIALS = credentials('dockerhub')
   }
+
   stages {
     stage('Checkout') {
       steps {
-        git 'https://github.com/ajayabd17/TaskTImer-React.git'
+        checkout([
+          $class: 'GitSCM',
+          branches: [[name: '*/master']],
+          userRemoteConfigs: [[
+            url: 'https://github.com/ajayabd17/TaskTimer-CICD.git'
+          ]]
+        ])
       }
     }
+
     stage('Build') {
       steps {
-        sh 'npm install'
-        sh 'npm run build'
+        echo 'Installing dependencies and building React app...'
+        bat 'npm install'
+        bat 'npm run build'
       }
     }
+
     stage('Docker Build & Push') {
       steps {
         script {
           def tag = "${env.BUILD_NUMBER}"
-          sh "docker build -t ${DOCKER_IMAGE}:${tag} ."
-          sh "docker tag ${DOCKER_IMAGE}:${tag} ${DOCKER_IMAGE}:latest"
-          withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-            sh '''
-              echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+          echo "Building Docker image: ${DOCKER_IMAGE}:${tag}"
+          bat "docker build -t ${DOCKER_IMAGE}:${tag} ."
+          bat "docker tag ${DOCKER_IMAGE}:${tag} ${DOCKER_IMAGE}:latest"
+
+          withCredentials([usernamePassword(credentialsId: 'dockerhub',
+                                            usernameVariable: 'DOCKER_USER',
+                                            passwordVariable: 'DOCKER_PASS')]) {
+            bat '''
+              echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
               docker push ${DOCKER_IMAGE}:${tag}
               docker push ${DOCKER_IMAGE}:latest
             '''
@@ -32,29 +46,31 @@ pipeline {
         }
       }
     }
+
     stage('Blue-Green Deploy') {
       steps {
         script {
-          // determine current version
-          def svc = sh(script: "kubectl get svc tasktimer-service -o=jsonpath='{.spec.selector.version}' || true", returnStdout: true).trim()
-          if (svc == '') { svc = 'green' } // default if service not present
+          echo 'Performing Blue-Green deployment on Kubernetes...'
+          def svc = bat(script: "kubectl get svc tasktimer-service -o=jsonpath='{.spec.selector.version}' || echo none", returnStdout: true).trim()
+          if (svc == 'none' || svc == '') { svc = 'green' }
           def newVersion = svc == 'blue' ? 'green' : 'blue'
           echo "Current svc version: ${svc}, deploying new version: ${newVersion}"
-          sh "kubectl apply -f kubernetes/deployment-${newVersion}.yaml"
-          sh "kubectl rollout status deployment/tasktimer-${newVersion} --timeout=120s"
-          // switch service selector
-          sh "kubectl apply -f kubernetes/service.yaml"
-          sh "kubectl patch service tasktimer-service -p '{\"spec\":{\"selector\":{\"app\":\"tasktimer\",\"version\":\"${newVersion}\"}}}'"
-          // optional: remove old deployment after switch
+
+          bat "kubectl apply -f kubernetes\\deployment-${newVersion}.yaml"
+          bat "kubectl rollout status deployment/tasktimer-${newVersion} --timeout=120s"
+          bat "kubectl apply -f kubernetes\\service.yaml"
+          bat "kubectl patch service tasktimer-service -p \"{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"tasktimer\\\",\\\"version\\\":\\\"${newVersion}\\\"}}}\""
+
           if (svc != '') {
-            sh "kubectl delete deployment tasktimer-${svc} || true"
+            bat "kubectl delete deployment tasktimer-${svc} || echo Old deployment already removed."
           }
         }
       }
     }
   }
+
   post {
-    success { echo 'Deployment successful' }
-    failure { echo 'Deployment failed' }
+    success { echo '✅ Deployment successful on Windows Jenkins Agent!' }
+    failure { echo '❌ Deployment failed!' }
   }
 }
