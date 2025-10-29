@@ -6,19 +6,22 @@ pipeline {
   }
 
   stages {
-    stage('Checkout') {
+    stage('Checkout React App') {
       steps {
-        // clone the actual app repo, not the CICD one
-        git branch: 'master',
-            url: 'https://github.com/ajayabd17/TaskTimer-React.git'
+        // Clone the React project into a subdirectory called 'app'
+        dir('app') {
+          git branch: 'master', url: 'https://github.com/ajayabd17/TaskTimer-React.git'
+        }
       }
     }
 
-    stage('Build') {
+    stage('Build React App') {
       steps {
         echo 'Installing dependencies and building React app...'
-        bat 'npm install'
-        bat 'npm run build'
+        dir('app') {
+          bat 'npm install'
+          bat 'npm run build'
+        }
       }
     }
 
@@ -27,7 +30,7 @@ pipeline {
         script {
           def tag = "${env.BUILD_NUMBER}"
           echo "Building Docker image: ${DOCKER_IMAGE}:${tag}"
-          bat "docker build -t ${DOCKER_IMAGE}:${tag} ."
+          bat "docker build -t ${DOCKER_IMAGE}:${tag} ./app"
           bat "docker tag ${DOCKER_IMAGE}:${tag} ${DOCKER_IMAGE}:latest"
 
           withCredentials([usernamePassword(credentialsId: 'dockerhub',
@@ -52,7 +55,7 @@ pipeline {
           def newVersion = svc == 'blue' ? 'green' : 'blue'
           echo "Current svc version: ${svc}, deploying new version: ${newVersion}"
 
-          // Use workspace paths for Kubernetes manifests
+          // Adjust to your Jenkins workspace path for Kubernetes YAMLs
           bat "kubectl apply -f ${WORKSPACE}\\kubernetes\\deployment-${newVersion}.yaml"
           bat "kubectl rollout status deployment/tasktimer-${newVersion} --timeout=120s"
           bat "kubectl apply -f ${WORKSPACE}\\kubernetes\\service.yaml"
