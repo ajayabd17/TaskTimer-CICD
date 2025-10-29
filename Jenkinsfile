@@ -44,14 +44,16 @@ pipeline {
         script {
           echo "Performing Blue-Green deployment..."
 
-          // 100% WINDOWS-SAFE — NO ||
+          // ONE bat BLOCK — WINDOWS-SAFE
           bat '''
             kubectl get svc tasktimer-service -o=jsonpath="{.spec.selector.version}" > version.txt 2>nul
             if errorlevel 1 echo none > version.txt
           '''
 
           def current = readFile('version.txt').trim()
-          if (current == '' || current == 'none') { current = 'green' }
+          if (current == '' || current == 'none') {
+            current = 'green'
+          }
 
           def newVersion = (current == 'blue') ? 'green' : 'blue'
           echo "Current: ${current}, Deploying: ${newVersion}"
