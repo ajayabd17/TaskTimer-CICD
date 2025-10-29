@@ -50,7 +50,6 @@ pipeline {
                 script {
                     echo "Performing Blue-Green deployment..."
 
-                    // WINDOWS-SAFE: No || — Use if errorlevel 1
                     bat '''
                         kubectl get svc tasktimer-service -o=jsonpath="{.spec.selector.version}" > version.txt 2>nul
                         if errorlevel 1 echo none > version.txt
