@@ -10,7 +10,7 @@ pipeline {
       steps {
         // Clone the React project into a subdirectory called 'app'
         dir('app') {
-          git branch: 'master', url: 'https://github.com/ajayabd17/TaskTimer-React.git'
+          git branch: 'main', url: 'https://github.com/ajayabd17/TaskTimer-React.git'
         }
       }
     }
