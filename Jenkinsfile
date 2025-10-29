@@ -25,15 +25,13 @@ pipeline {
     stage('Docker Build & Push') {
       steps {
         script {
-          def tag = "${env.BUILD_NUMBER}"
+          def tag = env.BUILD_NUMBER
           bat "docker build -t ${DOCKER_IMAGE}:${tag} ./app"
           bat "docker tag ${DOCKER_IMAGE}:${tag} ${DOCKER_IMAGE}:latest"
           withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-            bat """
-              echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
-              docker push ${DOCKER_IMAGE}:${tag}
-              docker push ${DOCKER_IMAGE}:latest
-            """
+            bat "echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin"
+            bat "docker push ${DOCKER_IMAGE}:${tag}"
+            bat "docker push ${DOCKER_IMAGE}:latest"
           }
         }
       }
@@ -41,30 +39,22 @@ pipeline {
 
     stage('Blue-Green Deploy') {
       steps {
-        script {
-          echo "Performing Blue-Green deployment..."
+        echo "Performing Blue-Green deployment..."
 
-          // 100% WINDOWS-SAFE — FIXED REDIRECTION
-          bat '''
-            kubectl get svc tasktimer-service -o=jsonpath="{.spec.selector.version}" > version.txt 2>nul
-            if errorlevel 1 echo none > version.txt
-          '''
+        bat '''
+          kubectl get svc tasktimer-service -o=jsonpath="{.spec.selector.version}" > version.txt 2>nul
+          if errorlevel 1 echo none > version.txt
+        '''
 
-          def current = readFile('version.txt').trim()
-          if (current == '' || current == 'none') {
-            current = 'green'
-          }
+        def current = readFile('version.txt').trim()
+        if (current == '' || current == 'none') current = 'green'
+        def newVersion = (current == 'blue') ? 'green' : 'blue'
 
-          def newVersion = (current == 'blue') ? 'green' : 'blue'
-          echo "Current: ${current}, Deploying: ${newVersion}"
-
-          bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\deployment-${newVersion}.yaml\""
-          bat "kubectl rollout status deployment/tasktimer-${newVersion} --timeout=120s"
-          bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\service.yaml\""
-          bat "kubectl patch service tasktimer-service -p \"{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"tasktimer\\\",\\\"version\\\":\\\"${newVersion}\\\"}}}\""
-
-          bat "kubectl delete deployment tasktimer-${current} --ignore-not-found=true"
-        }
+        bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\deployment-${newVersion}.yaml\""
+        bat "kubectl rollout status deployment/tasktimer-${newVersion} --timeout=120s"
+        bat "kubectl apply -f \"${WORKSPACE}\\kubernetes\\service.yaml\""
+        bat "kubectl patch service tasktimer-service -p \"{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"tasktimer\\\",\\\"version\\\":\\\"${newVersion}\\\"}}}\""
+        bat "kubectl delete deployment tasktimer-${current} --ignore-not-found=true"
       }
     }
   }
